@@ -1,0 +1,10 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+libdir=${prefix}/lib
+includedir=${prefix}/include
+nrsc5_commit=@NRSC5_COMMIT@
+
+Name: nrsc5
+Description: NRSC-5 digital broadcast receiver library
+Version: @NRSC5_VERSION@
+Libs: -L${libdir} -lnrsc5
+Cflags: -I${includedir}

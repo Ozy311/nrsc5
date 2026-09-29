@@ -308,8 +308,26 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
     OUTPUT_VARIABLE GIT_COMMIT_HASH
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
+  execute_process(
+    COMMAND git describe --tags --always --dirty
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE NRSC5_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  execute_process(
+    COMMAND git rev-parse HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE NRSC5_COMMIT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
 else()
   set(GIT_COMMIT_HASH "unknown")
+endif()
+if(NOT NRSC5_VERSION)
+  set(NRSC5_VERSION "unknown")
+endif()
+if(NOT NRSC5_COMMIT)
+  set(NRSC5_COMMIT "unknown")
 endif()
 add_definitions("-DGIT_COMMIT_HASH=\"${GIT_COMMIT_HASH}\"")
 

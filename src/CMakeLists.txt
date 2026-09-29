@@ -114,6 +114,9 @@ if (BUILD_CLI)
     )
 endif ()
 
+configure_file (nrsc5.pc.in nrsc5.pc @ONLY)
+install (FILES "${CMAKE_CURRENT_BINARY_DIR}/nrsc5.pc" DESTINATION lib/pkgconfig)
+
 install (
     TARGETS nrsc5 nrsc5_static
     RUNTIME DESTINATION bin
