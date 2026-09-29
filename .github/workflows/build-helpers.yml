@@ -130,9 +130,15 @@ jobs:
       - name: Install
         shell: pwsh
         run: |
-          $p = @{ Yes = $true; Prefix = (Join-Path $env:RUNNER_TEMP 'nrsc5'); Msys2Root = '${{ steps.msys2.outputs.msys2-location }}' }
-          if ('${{ matrix.offline }}' -eq 'true') { $p.OfflineDeps = Join-Path $env:RUNNER_TEMP 'deps' }
-          & scripts\install-windows.ps1 @p *>&1 | Tee-Object -FilePath install.log
+          $prefix = Join-Path $env:RUNNER_TEMP 'nrsc5'
+          $msys2 = '${{ steps.msys2.outputs.msys2-location }}'
+          if ('${{ matrix.offline }}' -eq 'true') {
+            $p = @{ Yes = $true; Prefix = $prefix; Msys2Root = $msys2; OfflineDeps = (Join-Path $env:RUNNER_TEMP 'deps') }
+            & scripts\install-windows.ps1 @p *>&1 | Tee-Object -FilePath install.log
+          } else {
+            # The double-click wrapper, which starts Windows PowerShell 5.1.
+            cmd /c "scripts\Install-nrsc5-Windows.cmd -Yes -Prefix $prefix -Msys2Root $msys2" *>&1 | Tee-Object -FilePath install.log
+          }
           if ($LASTEXITCODE) { exit 1 }
           if (-not (Select-String -Path install.log -Pattern '^OK$' -Quiet)) { throw 'smoke test did not report OK' }
           if ('${{ matrix.offline }}' -eq 'true') {
@@ -147,7 +153,7 @@ jobs:
           }
           Get-ChildItem (Join-Path $prefix 'bin') | Format-Table Name, Length
       - name: Uninstall
-        shell: pwsh
+        shell: powershell
         run: |
           $prefix = Join-Path $env:RUNNER_TEMP 'nrsc5'
           & scripts\uninstall.ps1 -Prefix $prefix
