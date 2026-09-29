@@ -2,6 +2,62 @@
 
 This program receives NRSC-5 digital radio stations using an RTL-SDR dongle, or by reading from I/Q files. It offers a command-line interface as well as an API upon which other applications can be built. Before using it, you'll first need to compile the program using the build instructions below.
 
+## Quick install from source
+
+These scripts build the NRSC-5 digital broadcast receiver library (shared library, header and pkg-config file) from source on your own machine and install it into a per-user location. Nothing prebuilt is downloaded. Run one command from a clone of this repository:
+
+| Platform | Command |
+|---|---|
+| Linux (apt, dnf, zypper, pacman) | `scripts/install-linux.sh` |
+| macOS ([Homebrew](https://brew.sh)) | `scripts/install-macos.sh` |
+| Windows | double-click `scripts\Install-nrsc5-Windows.cmd` (or run `scripts\install-windows.ps1`) |
+
+The Linux and macOS scripts install the build dependencies first (`sudo` is used only for the Linux package install; use `--no-deps` to skip it). The Windows script builds inside [MSYS2](https://www.msys2.org) (UCRT64) and offers to install MSYS2 with `winget` if it is missing.
+
+Every script ends by building `scripts/smoketest.c`, loading the installed library by absolute path, calling `nrsc5_open_pipe()` and `nrsc5_close()`, and printing a summary that ends with `OK`; it exits non-zero with a one-line reason otherwise. Re-running a script updates the installation in place.
+
+### Install layout
+
+| Platform | Prefix (default) | Library | Header | pkg-config |
+|---|---|---|---|---|
+| Linux | `$HOME/.local` | `lib/libnrsc5.so` | `include/nrsc5.h` | `lib/pkgconfig/nrsc5.pc` |
+| macOS | `$HOME/.local` | `lib/libnrsc5.dylib` | `include/nrsc5.h` | `lib/pkgconfig/nrsc5.pc` |
+| Windows | `%LOCALAPPDATA%\Programs\nrsc5` | `bin\libnrsc5.dll`, plus any MinGW runtime DLLs it needs, in the same `bin\` | `include\nrsc5.h` | `lib\pkgconfig\nrsc5.pc` |
+
+Change the prefix with `--prefix <dir>` (PowerShell: `-Prefix <dir>`) or the `NRSC5_PREFIX` environment variable. The pkg-config file records the version (`git describe`) and the full commit hash (`nrsc5_commit`). `$HOME/.local/lib` is not on the default library search path, so point other software at the library by absolute path, or set `PKG_CONFIG_PATH=$HOME/.local/lib/pkgconfig`.
+
+Other options: `--no-deps` (`-NoDeps`), `--offline-deps <dir>` (`-OfflineDeps <dir>`), and on Windows `-Yes` (answer prompts) and `-Msys2Root <dir>` (MSYS2 location, default `C:\msys64`).
+
+### Uninstall
+
+The installer records everything it installed in `share/nrsc5/install-manifest.txt` under the prefix. To remove exactly those files, run `scripts/uninstall.sh` (Linux, macOS) or `scripts\uninstall.ps1` (Windows), with the same `--prefix` / `-Prefix` if you used one.
+
+### Building without network access
+
+To build from local copies of the dependencies, put them in one directory:
+
+    <dir>/faad2                  FAAD2 checkout at tag 2.11.2
+    <dir>/fftw-3.3.10.tar.gz     FFTW 3.3.10 tarball
+    <dir>/libusb                 libusb checkout at tag v1.0.27
+    <dir>/rtl-sdr                rtl-sdr checkout at tag v2.0.2
+
+and pass it with `--offline-deps <dir>` (`-OfflineDeps <dir>` on Windows). For example:
+
+    mkdir deps && cd deps
+    git clone https://github.com/knik0/faad2.git && git -C faad2 checkout 2.11.2
+    curl -LO https://www.fftw.org/fftw-3.3.10.tar.gz
+    git clone https://github.com/libusb/libusb.git && git -C libusb checkout v1.0.27
+    git clone https://gitea.osmocom.org/sdr/rtl-sdr.git && git -C rtl-sdr checkout v2.0.2
+
+(`git clone` also accepts a `git bundle` file in place of the URL.) FAAD2 is always built from source; FFTW, libusb and rtl-sdr are only built from source when the system copy is not used, which is always the case on Windows. The scripts pass these CMake cache variables, which you can also set yourself; when unset, the dependencies are downloaded as before. The FAAD2 patch is applied to a copy, so the directory you provide is not modified.
+
+| Variable | Replaces |
+|---|---|
+| `FAAD2_SOURCE_DIR` | the FAAD2 2.11.2 git download |
+| `FFTW_TARBALL` | the fftw-3.3.10 download (the SHA256 check still applies) |
+| `LIBUSB_SOURCE_DIR` | the libusb download |
+| `RTLSDR_SOURCE_DIR` | the rtl-sdr download |
+
 ## Building on Ubuntu, Debian or Raspbian
 
     sudo apt install git build-essential cmake autoconf libtool libao-dev libfftw3-dev librtlsdr-dev
