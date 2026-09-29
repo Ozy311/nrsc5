@@ -1,0 +1,155 @@
+name: Build helpers
+
+# Runs the one-command install scripts into a temporary prefix, checks the
+# install layout and smoke test, then uninstalls. Builds from source only;
+# nothing is uploaded and no release is created.
+
+on:
+  push:
+    paths:
+      - scripts/**
+      - CMakeLists.txt
+      - src/CMakeLists.txt
+      - src/nrsc5.pc.in
+      - .github/workflows/build-helpers.yml
+  pull_request:
+    paths:
+      - scripts/**
+      - CMakeLists.txt
+      - src/CMakeLists.txt
+      - src/nrsc5.pc.in
+      - .github/workflows/build-helpers.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Choose prefix
+        run: echo "PREFIX=$RUNNER_TEMP/prefix" >> "$GITHUB_ENV"
+      - name: Install
+        run: scripts/install-linux.sh --prefix "$PREFIX" | tee install.log
+      - name: Check layout
+        run: |
+          test -f "$PREFIX/lib/libnrsc5.so"
+          test -f "$PREFIX/include/nrsc5.h"
+          test -f "$PREFIX/lib/pkgconfig/nrsc5.pc"
+          test -f "$PREFIX/share/nrsc5/install-manifest.txt"
+          grep -qx OK install.log
+      - name: Uninstall
+        run: |
+          scripts/uninstall.sh --prefix "$PREFIX"
+          test -z "$(find "$PREFIX" -type f)"
+      - name: Install again from local sources (offline)
+        run: |
+          mkdir -p "$RUNNER_TEMP/deps"
+          git clone --depth 1 --branch 2.11.2 https://github.com/knik0/faad2.git "$RUNNER_TEMP/deps/faad2"
+          curl -fL -o "$RUNNER_TEMP/deps/fftw-3.3.10.tar.gz" https://www.fftw.org/fftw-3.3.10.tar.gz
+          rm -rf build-lib
+          scripts/install-linux.sh --no-deps --prefix "$PREFIX" --offline-deps "$RUNNER_TEMP/deps" | tee install.log
+          grep -qx OK install.log
+          grep -q "download step (DIR copy) for 'faad2_external'" install.log
+          scripts/uninstall.sh --prefix "$PREFIX"
+          test -z "$(find "$PREFIX" -type f)"
+
+  macos:
+    name: macOS (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-15-intel]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Choose prefix
+        run: echo "PREFIX=$RUNNER_TEMP/prefix" >> "$GITHUB_ENV"
+      - name: Install
+        run: scripts/install-macos.sh --prefix "$PREFIX" | tee install.log
+      - name: Check layout
+        run: |
+          test -f "$PREFIX/lib/libnrsc5.dylib"
+          test -f "$PREFIX/include/nrsc5.h"
+          test -f "$PREFIX/lib/pkgconfig/nrsc5.pc"
+          test -f "$PREFIX/share/nrsc5/install-manifest.txt"
+          test "$(otool -D "$PREFIX/lib/libnrsc5.dylib" | tail -n 1)" = "$PREFIX/lib/libnrsc5.dylib"
+          grep -qx OK install.log
+      - name: Uninstall
+        run: |
+          scripts/uninstall.sh --prefix "$PREFIX"
+          test -z "$(find "$PREFIX" -type f)"
+      - name: Install again from local sources (offline)
+        run: |
+          mkdir -p "$RUNNER_TEMP/deps"
+          git clone --depth 1 --branch 2.11.2 https://github.com/knik0/faad2.git "$RUNNER_TEMP/deps/faad2"
+          curl -fL -o "$RUNNER_TEMP/deps/fftw-3.3.10.tar.gz" https://www.fftw.org/fftw-3.3.10.tar.gz
+          rm -rf build-lib
+          scripts/install-macos.sh --no-deps --prefix "$PREFIX" --offline-deps "$RUNNER_TEMP/deps" | tee install.log
+          grep -qx OK install.log
+          grep -q "download step (DIR copy) for 'faad2_external'" install.log
+          scripts/uninstall.sh --prefix "$PREFIX"
+          test -z "$(find "$PREFIX" -type f)"
+
+  windows:
+    name: Windows${{ matrix.offline && ' (offline)' || '' }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        offline: [false, true]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: UCRT64
+          update: true
+      - name: Fetch local sources
+        if: matrix.offline
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/deps"
+          git clone --depth 1 --branch 2.11.2 https://github.com/knik0/faad2.git "$RUNNER_TEMP/deps/faad2"
+          git clone --depth 1 --branch v1.0.27 https://github.com/libusb/libusb.git "$RUNNER_TEMP/deps/libusb"
+          git clone --depth 1 --branch v2.0.2 https://gitea.osmocom.org/sdr/rtl-sdr.git "$RUNNER_TEMP/deps/rtl-sdr"
+          curl -fL -o "$RUNNER_TEMP/deps/fftw-3.3.10.tar.gz" https://www.fftw.org/fftw-3.3.10.tar.gz
+      - name: Install
+        shell: pwsh
+        run: |
+          $p = @{ Yes = $true; Prefix = (Join-Path $env:RUNNER_TEMP 'nrsc5'); Msys2Root = '${{ steps.msys2.outputs.msys2-location }}' }
+          if ('${{ matrix.offline }}' -eq 'true') { $p.OfflineDeps = Join-Path $env:RUNNER_TEMP 'deps' }
+          & scripts\install-windows.ps1 @p *>&1 | Tee-Object -FilePath install.log
+          if ($LASTEXITCODE) { exit 1 }
+          if (-not (Select-String -Path install.log -Pattern '^OK$' -Quiet)) { throw 'smoke test did not report OK' }
+          if ('${{ matrix.offline }}' -eq 'true') {
+            if (Select-String -Path install.log -Pattern 'git clone|download, verify' -Quiet) { throw 'offline build downloaded something' }
+          }
+      - name: Check layout
+        shell: pwsh
+        run: |
+          $prefix = Join-Path $env:RUNNER_TEMP 'nrsc5'
+          foreach ($f in 'bin\libnrsc5.dll', 'include\nrsc5.h', 'lib\pkgconfig\nrsc5.pc', 'share\nrsc5\install-manifest.txt') {
+            if (-not (Test-Path (Join-Path $prefix $f))) { throw "missing $f" }
+          }
+          Get-ChildItem (Join-Path $prefix 'bin') | Format-Table Name, Length
+      - name: Uninstall
+        shell: pwsh
+        run: |
+          $prefix = Join-Path $env:RUNNER_TEMP 'nrsc5'
+          & scripts\uninstall.ps1 -Prefix $prefix
+          if ($LASTEXITCODE) { exit 1 }
+          if ((Test-Path $prefix) -and (Get-ChildItem $prefix -Recurse -File)) { throw 'files left behind' }
