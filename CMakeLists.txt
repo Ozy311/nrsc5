@@ -21,6 +21,10 @@ option (BUILD_DOC "Build API documentation" OFF)
 option (BUILD_CLI "Build nrsc5 executable" ON)
 
 set (FAAD2_CMAKE_ARGS "" CACHE STRING "Extra arguments for FAAD2 cmake command")
+set (FAAD2_SOURCE_DIR "" CACHE PATH "Use this FAAD2 2.11.2 checkout instead of downloading it")
+set (FFTW_TARBALL "" CACHE FILEPATH "Use this fftw-3.3.10 tarball instead of downloading it")
+set (LIBUSB_SOURCE_DIR "" CACHE PATH "Use this libusb checkout instead of downloading it")
+set (RTLSDR_SOURCE_DIR "" CACHE PATH "Use this rtl-sdr checkout instead of downloading it")
 set (LIBRARY_DEBUG_LEVEL "5" CACHE STRING "Debug logging level for libnrsc5: 1=debug, 2=info, 3=warn, 4=error, 5=none")
 set (HOST_TRIPLE "${HOST_TRIPLE_DEFAULT}" CACHE STRING "Override default host triple")
 if (HOST_TRIPLE)
@@ -104,9 +108,14 @@ check_symbol_exists (_Complex_I complex.h HAVE_COMPLEX_I)
 
 if (NOT USE_SYSTEM_FFTW)
     set (FFTW_PREFIX "${CMAKE_BINARY_DIR}/fftw-prefix")
+    if (FFTW_TARBALL)
+        set (FFTW_URL "${FFTW_TARBALL}")
+    else ()
+        set (FFTW_URL "https://www.fftw.org/fftw-3.3.10.tar.gz")
+    endif ()
     ExternalProject_Add (
         fftw_external
-        URL "https://www.fftw.org/fftw-3.3.10.tar.gz"
+        URL "${FFTW_URL}"
         URL_HASH SHA256=56c932549852cddcfafdab3820b0200c7742675be92179e59e6215b340e26467
         PREFIX ${FFTW_PREFIX}
 
@@ -124,11 +133,15 @@ endif ()
 
 if (NOT USE_SYSTEM_LIBUSB)
     set (LIBUSB_PREFIX "${CMAKE_BINARY_DIR}/libusb-prefix")
+    if (LIBUSB_SOURCE_DIR)
+        set (LIBUSB_FETCH URL "${LIBUSB_SOURCE_DIR}")
+    else ()
+        set (LIBUSB_FETCH GIT_REPOSITORY "https://github.com/libusb/libusb.git" GIT_TAG v1.0.27)
+    endif ()
     ExternalProject_Add (
         libusb_external
         TIMEOUT 120
-        GIT_REPOSITORY "https://github.com/libusb/libusb.git"
-        GIT_TAG v1.0.27
+        ${LIBUSB_FETCH}
         PREFIX ${LIBUSB_PREFIX}
 
         UPDATE_COMMAND ""
@@ -154,11 +167,15 @@ endif ()
 
 if (NOT USE_SYSTEM_RTLSDR)
     set (RTLSDR_PREFIX "${CMAKE_BINARY_DIR}/rtlsdr-prefix")
+    if (RTLSDR_SOURCE_DIR)
+        set (RTLSDR_FETCH URL "${RTLSDR_SOURCE_DIR}")
+    else ()
+        set (RTLSDR_FETCH GIT_REPOSITORY "https://gitea.osmocom.org/sdr/rtl-sdr.git" GIT_TAG v2.0.2)
+    endif ()
     ExternalProject_Add (
         rtlsdr_external
         TIMEOUT 120
-        GIT_REPOSITORY "https://gitea.osmocom.org/sdr/rtl-sdr.git"
-        GIT_TAG v2.0.2
+        ${RTLSDR_FETCH}
         PREFIX ${RTLSDR_PREFIX}
 
         UPDATE_COMMAND ""
@@ -239,11 +256,15 @@ if (USE_FAAD2)
 
     if (NOT FAAD2_FOUND)
         set (FAAD2_PREFIX "${CMAKE_BINARY_DIR}/faad2-prefix")
+        if (FAAD2_SOURCE_DIR)
+            set (FAAD2_FETCH URL "${FAAD2_SOURCE_DIR}")
+        else ()
+            set (FAAD2_FETCH GIT_REPOSITORY "https://github.com/knik0/faad2.git" GIT_TAG 2.11.2)
+        endif ()
         ExternalProject_Add (
             faad2_external
             TIMEOUT 120
-            GIT_REPOSITORY "https://github.com/knik0/faad2.git"
-            GIT_TAG 2.11.2
+            ${FAAD2_FETCH}
             PREFIX ${FAAD2_PREFIX}
 
             UPDATE_COMMAND ""
