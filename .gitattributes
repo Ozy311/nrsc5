@@ -1,0 +1,4 @@
+# Keep the install scripts runnable after a checkout with autocrlf (Windows).
+*.sh text eol=lf
+src/nrsc5.pc.in text eol=lf
+*.cmd text eol=crlf
